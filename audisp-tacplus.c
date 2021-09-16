@@ -65,6 +65,9 @@
 /* Tacacs+ support lib */
 #include <libtac/support.h>
 
+/* Remove user secret */
+#include "user_secret.h"
+
 #define _VMAJ 1
 #define _VMIN 0
 #define _VPATCH 0
