@@ -22,6 +22,20 @@ void testcase_load_user_secret_setting() {
 	//CU_ASSERT_STRING_EQUAL(mock_itrace_message_buffer, "Plugin: can't load plugin ./testplugin.so: MOCK error\n");
 }
 
+/* Test convert setting string to regex string*/
+void testcase_convert_secret_setting_to_regex() {
+    char regex_buffer[MAX_LINE_SIZE];
+    
+    /* '*' in input setting should replace to (\S*) */
+    convert_secret_setting_to_regex(regex_buffer, sizeof(regex_buffer), "testcommand    *");
+    debug_printf("regex_buffer: %s\n", regex_buffer);
+	CU_ASSERT_STRING_EQUAL(regex_buffer, "testcommand\\s*(\\S*)");
+
+    convert_secret_setting_to_regex(regex_buffer, sizeof(regex_buffer), "/usr/sbin/chpasswd *");
+    debug_printf("regex_buffer: %s\n", regex_buffer);
+	CU_ASSERT_STRING_EQUAL(regex_buffer, "/usr/sbin/chpasswd\\s*(\\S*)");
+}
+
 int main(void) {
   if (CUE_SUCCESS != CU_initialize_registry()) {
     return CU_get_error();
@@ -38,7 +52,8 @@ int main(void) {
     return CU_get_error();
   }
 
-  if (!CU_add_test(ste, "Test testcase_load_user_secret_setting()...\n", testcase_load_user_secret_setting)) {
+  if (!CU_add_test(ste, "Test testcase_load_user_secret_setting()...\n", testcase_load_user_secret_setting)
+      || !CU_add_test(ste, "Test testcase_convert_secret_setting_to_regex()...\n", testcase_convert_secret_setting_to_regex)) {
     CU_cleanup_registry();
     return CU_get_error();
   }

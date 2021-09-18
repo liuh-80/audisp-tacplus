@@ -23,6 +23,14 @@
 
 #include "user_secret.h"
 
+// define USER_SECRET_UT_DEBUG to output UT debug message.
+//#define USER_SECRET_UT_DEBUG
+#if defined (USER_SECRET_UT_DEBUG)
+#define debug_printf printf
+#else
+#define debug_printf
+#endif
+
 #define TEST_SCEANRIO_LOAD_USER_SECRET_SETTING  	1
 
 /* Set test scenario for test*/

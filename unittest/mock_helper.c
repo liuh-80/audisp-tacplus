@@ -7,14 +7,6 @@
 #include <CUnit/Basic.h>
 #include "mock_helper.h"
 
-// define USER_SECRET_UT_DEBUG to output UT debug message.
-//#define USER_SECRET_UT_DEBUG
-#if defined (USER_SECRET_UT_DEBUG)
-#define debug_printf printf
-#else
-#define debug_printf
-#endif
-
 /* define test scenarios for mock functions return different value by scenario. */
 int test_scenario;
 
