@@ -16,6 +16,10 @@
 #define REGEX_APPEND_SUCCESS              0
 #define REGEX_APPEND_FAILED               1
 
+/* Regex fix result. */
+#define USER_SECRET_FIXED                 0
+#define USER_SECRET_NOT_FOUND             1
+
 /* Regex list node. */
 typedef struct regex_node {
     struct regex_node *next;
@@ -33,5 +37,17 @@ extern int initialize_user_secret_setting(const char *setting_path);
 
 /* Replace user secret in buffer */
 extern void replace_user_secret(const char *buf, size_t buflen);
+
+/* Free loaded regex */
+extern void free_regex();
+
+/* Append regex to list */
+extern int append_regex(regex_t regex);
+
+/* Replace user secret with regex */
+extern int fix_user_secret_by_regex(const char* command, char* result_buffer, size_t buffer_size, regex_t regex);
+
+/* Replace user secret with regex */
+extern int fix_user_secret(const char* command, char* result_buffer, size_t buffer_size);
 
 #endif /* USER_SECRED_H */

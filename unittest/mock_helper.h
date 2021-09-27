@@ -24,7 +24,7 @@
 #include "user_secret.h"
 
 // define USER_SECRET_UT_DEBUG to output UT debug message.
-//#define USER_SECRET_UT_DEBUG
+#define USER_SECRET_UT_DEBUG
 #if defined (USER_SECRET_UT_DEBUG)
 #define debug_printf printf
 #else

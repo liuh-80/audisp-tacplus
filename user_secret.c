@@ -12,6 +12,9 @@
 #define USER_SECRET_REGEX_WHITE_SPACE "\\s*"
 #define USER_SECRET_REGEX_SECRET "(\\S*)"
 
+/* Regex match group count */
+#define REGEX_MATCH_GROUP_COUNT      1
+
 /* The command alias prefix */
 static const char* COMMAND_ALIAS = "Cmnd_Alias";
 
@@ -70,21 +73,42 @@ void free_regex()
 }
 
 /* Replace user secret with regex */
-int invoke_loaded_plugins(char* command)
+int fix_user_secret_by_regex(const char* command, char* result_buffer, size_t buffer_size, regex_t regex)
+{
+    regmatch_t pmatch[REGEX_MATCH_GROUP_COUNT];
+    if (regexec(&regex, command, REGEX_MATCH_GROUP_COUNT, pmatch, 0) == REG_NOMATCH) {
+        printf("Not found user secret.\n");
+        return USER_SECRET_NOT_FOUND;
+    }
+    
+    /* Found user secret between pmatch[0].rm_so to pmatch[0].rm_eo, replace it. */
+    printf("Found user secret between: %d -- %d\n", pmatch[0].rm_so, pmatch[0].rm_eo);
+    return USER_SECRET_FIXED;
+}
+
+/* Replace user secret with regex */
+int fix_user_secret(const char* command, char* result_buffer, size_t buffer_size)
 {
     if (global_regex_list == NULL) {
         return 0;
     }
 
+    regmatch_t  pmatch[1];
+    regoff_t    off, len;
+
     /* Check every regex */
     REGEX_NODE *next_node = global_regex_list;
     while (next_node != NULL) {
-        /* Check with current plugin regex */
+        /* Try fix user secret with current regex */
+        if (fix_user_secret_by_regex(command, result_buffer, buffer_size, next_node->regex) == USER_SECRET_FIXED) {
+            return USER_SECRET_FIXED;
+        }
+        
         /* Continue with next regex */
         next_node = next_node->next;
     }
     
-    return 0;
+    return USER_SECRET_NOT_FOUND;
 }
 
 /* Trim start */
