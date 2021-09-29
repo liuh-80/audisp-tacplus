@@ -16,40 +16,40 @@ int memory_allocate_count;
 /* Set test scenario for test*/
 void set_test_scenario(int scenario)
 {
-  test_scenario = scenario;
+    test_scenario = scenario;
 }
 
 /* Get test scenario for test*/
 int get_test_scenario()
 {
-  return test_scenario;
+    return test_scenario;
 }
 
 /* Set memory allocate count for test*/
 void set_memory_allocate_count(int count)
 {
-  memory_allocate_count = count;
+    memory_allocate_count = count;
 }
 
 /* Get memory allocate count for test*/
 int get_memory_allocate_count()
 {
-  return memory_allocate_count;
+    return memory_allocate_count;
 }
 
 
 /* MOCK malloc method*/
-void* mock_malloc (size_t size)
+void *mock_malloc(size_t size)
 {
-	memory_allocate_count++;
-	debug_printf("MOCK: malloc memory count: %d\n", memory_allocate_count);
-	return malloc(size);
+    memory_allocate_count++;
+    debug_printf("MOCK: malloc %ld bytes memory count: %d\n", size, memory_allocate_count);
+    return malloc(size);
 }
 
 /* MOCK free method*/
-void mock_free (void* ptr)
+void mock_free(void* ptr)
 {
-	memory_allocate_count--;
-	debug_printf("MOCK: free memory count: %d\n", memory_allocate_count);
-	free(ptr);
+    memory_allocate_count--;
+    debug_printf("MOCK: free memory count: %d\n", memory_allocate_count);
+    free(ptr);
 }

@@ -1,19 +1,46 @@
-#include "user_secret.h"
-
+#include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 #include <syslog.h>
 #include <stdlib.h>
+
+#include "regex_helper.h"
+#include "trace.h"
+#include "user_secret.h"
+
+// use mock functions when build for UT
+#if defined (UNIT_TEST)
+void *mock_malloc(size_t size);
+void mock_free(void* ptr);
+#define malloc  mock_malloc
+#define free    mock_free
+#else
+#endif
+
+#define min(a,b)            (((a) < (b)) ? (a) : (b))
 
 /* Macros for have_next_line result */
 #define HAVE_NEXT_SETTING_LINE 1
 #define NO_NEXT_SETTING_LINE   0
 
-/* Macros for user secret regex */
-#define USER_SECRET_REGEX_WHITE_SPACE "\\s*"
-#define USER_SECRET_REGEX_SECRET "(\\S*)"
+/* 
+ * Macros for user secret regex
+ * These are BRE regex, please refer to: https://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Basic_Regular_Expressions
+ */
+#define USER_SECRET_REGEX_WHITE_SPACE              "[[:space:]]*"
+#define USER_SECRET_REGEX_SECRET                   "\\([^[:space:]]*\\)"
 
-/* Regex match group count */
-#define REGEX_MATCH_GROUP_COUNT      1
+/* Macros for parse user input */
+#define USER_COMMAND_TOKEN_WHITESPACE              " \t\n\r\f"
+#define USER_COMMAND_TOKEN_SETTING_SPLITTER        " =\t"
+#define USER_COMMAND_TOKEN_EQUAL                   "="
+#define USER_COMMAND_TOKEN_COMMA                   ","
+
+/* Regex match group count, 2 because only have 1 subexpression for user secret */
+#define REGEX_MATCH_GROUP_COUNT      2
+
+/* The user secret mask */
+#define USER_SECRET_MASK                   '*'
 
 /* The command alias prefix */
 static const char* COMMAND_ALIAS = "Cmnd_Alias";
@@ -28,17 +55,20 @@ REGEX_NODE *global_regex_list = NULL;
 int append_regex(regex_t regex)
 {
     /* Create and initialize regex node */
-    REGEX_NODE *new_regex_node = (REGEX_NODE*)malloc(sizeof(REGEX_NODE));
+    REGEX_NODE *new_regex_node = (REGEX_NODE *)malloc(sizeof(REGEX_NODE));
     if (new_regex_node == NULL)
     {
         /* When allocate memory failed, stop and return. also output log to both syslog and stderr with LOG_PERROR*/
-        syslog(LOG_PERROR, "audisp-tacplus: failed to allocate memory for regex node.\n");
+        trace("Failed to allocate memory for regex node.\n");
         return REGEX_APPEND_FAILED;
     }
 
+    trace("step 1: %p.\n", new_regex_node);
     new_regex_node->next = NULL;
+    trace("step 2.\n");
     new_regex_node->regex = regex;
 
+    trace("step 3.\n");
     /* Find the pointer to the latest plugin node's 'next' field */
     REGEX_NODE **current_node = &global_regex_list;
     while (*current_node != NULL) {
@@ -50,8 +80,8 @@ int append_regex(regex_t regex)
     return REGEX_APPEND_SUCCESS;
 }
 
-/* Free loaded regex */
-void free_regex()
+/* Release user secret setting */
+void release_user_secret_setting()
 {
     if (global_regex_list == NULL) {
         return;
@@ -61,50 +91,33 @@ void free_regex()
     REGEX_NODE *next_node = global_regex_list;
     while (next_node != NULL) {
         /* Continue with next pligin */
-		REGEX_NODE* current_node_memory = next_node;
+        REGEX_NODE* current_node_memory = next_node;
         next_node = next_node->next;
         
-		/* Free node memory, this may also reset all allocated memory depends on c lib implementation */
-		free(current_node_memory);
+        /* Free node memory, this may also reset all allocated memory depends on c lib implementation */
+        free(current_node_memory);
     }
 
     /* Reset list */
-	global_regex_list = NULL;
+    global_regex_list = NULL;
 }
 
 /* Replace user secret with regex */
-int fix_user_secret_by_regex(const char* command, char* result_buffer, size_t buffer_size, regex_t regex)
-{
-    regmatch_t pmatch[REGEX_MATCH_GROUP_COUNT];
-    if (regexec(&regex, command, REGEX_MATCH_GROUP_COUNT, pmatch, 0) == REG_NOMATCH) {
-        printf("Not found user secret.\n");
-        return USER_SECRET_NOT_FOUND;
-    }
-    
-    /* Found user secret between pmatch[0].rm_so to pmatch[0].rm_eo, replace it. */
-    printf("Found user secret between: %d -- %d\n", pmatch[0].rm_so, pmatch[0].rm_eo);
-    return USER_SECRET_FIXED;
-}
-
-/* Replace user secret with regex */
-int fix_user_secret(const char* command, char* result_buffer, size_t buffer_size)
+int remove_user_secret(const char* command, char* result_buffer, size_t buffer_size)
 {
     if (global_regex_list == NULL) {
         return 0;
     }
 
-    regmatch_t  pmatch[1];
-    regoff_t    off, len;
-
     /* Check every regex */
     REGEX_NODE *next_node = global_regex_list;
     while (next_node != NULL) {
         /* Try fix user secret with current regex */
-        if (fix_user_secret_by_regex(command, result_buffer, buffer_size, next_node->regex) == USER_SECRET_FIXED) {
+        if (remove_user_secret_by_regex(command, result_buffer, buffer_size, next_node->regex) == USER_SECRET_FIXED) {
             return USER_SECRET_FIXED;
         }
         
-        /* Continue with next regex */
+        /* If user secret not fix, continue try next regex */
         next_node = next_node->next;
     }
     
@@ -141,7 +154,7 @@ int check_have_next_line(const char *str)
     /* Find last none whitespace character */
     char last_none_whitespace_char = 0;
     while (endpos-- > str) {
-        if (isspace(*endpos)) {
+        if (!isspace(*endpos)) {
             last_none_whitespace_char = *endpos;
             break;
         }
@@ -155,48 +168,10 @@ int check_have_next_line(const char *str)
     return NO_NEXT_SETTING_LINE;
 }
 
-/* Append user secret setting
- * If the resulting longer than buffer size, the remaining characters are discarded and not stored.
- */
-void convert_secret_setting_to_regex(char *buf, size_t buf_size, const char* secret_setting)
-{
-    int dest_idx = 0, src_idx = 0;
-    int last_char_is_whitespace = 0;
-
-    /* Reset buffer, make sure following code in while loop can work. */
-    memset(buf, 0, buf_size);
-
-    while (secret_setting[src_idx]) {
-        int buffer_used_space= strlen(buf);
-        if (secret_setting[src_idx] == '*') {
-            /* Replace * to (\S*) */
-            snprintf(buf + buffer_used_space, buf_size - buffer_used_space,USER_SECRET_REGEX_SECRET);
-        }
-        else if (isspace(secret_setting[src_idx])) {
-            /* Ignore mutiple input space */
-            if (!last_char_is_whitespace) {
-                /* Replace space to regex \s* which match multiple space */
-                snprintf(buf + buffer_used_space, buf_size - buffer_used_space,USER_SECRET_REGEX_WHITE_SPACE);
-            }
-        }
-        else if (buffer_used_space < buf_size - 1){
-            /* Copy regular characters */
-            buf[buffer_used_space] = secret_setting[src_idx];
-        }
-        else {
-            /* Buffer full, return here. */
-            return;
-        }
-
-        last_char_is_whitespace = isspace(secret_setting[src_idx]);
-        src_idx++;
-    }
-}
-
-/* Append user secret setting */
+/* Append user secret setting to global list */
 int append_user_secret_setting(const char *setting_str)
 {
-    printf("Append user secret regex: %s\n", setting_str);
+    trace("Append user secret regex: %s\n", setting_str);
     
     /* convert the setting string to regex */
     char regex_buffer[MAX_LINE_SIZE];
@@ -204,6 +179,7 @@ int append_user_secret_setting(const char *setting_str)
     
     regex_t regex;
     if (regcomp(&regex, regex_buffer, REG_NEWLINE)) {
+        trace("Complie regex failed: %s\n", regex_buffer);
         return INITIALIZE_INCORRECT_REGEX;
     }
     
@@ -227,7 +203,7 @@ int initialize_user_secret_setting(const char *setting_path)
     while (fgets(line_buffer, sizeof line_buffer, setting_file)) {
         char* token;
         if (!continue_parse_user_secret) {
-            token = strtok(line_buffer, " \t\n\r\f");
+            token = strtok(line_buffer, USER_COMMAND_TOKEN_WHITESPACE);
             if (!token) {
                 /* Empty line will not get any token */
                 continue;
@@ -239,14 +215,14 @@ int initialize_user_secret_setting(const char *setting_path)
                 continue;
             }
 
-            token = strtok(NULL, " =\t");
+            token = strtok(NULL, USER_COMMAND_TOKEN_SETTING_SPLITTER);
             if (strncmp(token, USER_SECRET_SETTING, sizeof(USER_SECRET_SETTING))) {
                 /* Ignore current line when current line is not a user secret setting */
                 continue;
             }
             
             /* Get user secret setting content */
-            token = strtok(NULL, "=");
+            token = strtok(NULL, USER_COMMAND_TOKEN_EQUAL);
         }
         else {
             /* The strok will return setting before first whitespace, so need use origional buffer */
@@ -256,23 +232,15 @@ int initialize_user_secret_setting(const char *setting_path)
         /* Check if have next setting line */
         continue_parse_user_secret = check_have_next_line(token);
         
-        /* Get settings before ',' */
-        token = strtok(token, ",");
+        /* Get settings before comma */
+        token = strtok(token, USER_COMMAND_TOKEN_COMMA);
         token = trim_start(token);
         
         /* Append setting regex */
-        result = append_user_secret_setting(token);
-        if (result != INITIALIZE_SUCCESS) {
-            break;
-        }
+        append_user_secret_setting(token);
     }
 
     fclose(setting_file);
 
     return result;
-}
-
-/* Replace user secret in buffer */
-void replace_user_secret(const char *buf, size_t buflen)
-{
 }
