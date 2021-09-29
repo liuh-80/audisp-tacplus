@@ -23,9 +23,6 @@ typedef struct regex_node {
     regex_t regex;
 } REGEX_NODE;
 
-/* User secret setting file */
-static const char *sudoers_path = "/etc/sudoers";
-
 /* Initialize user secret setting */
 extern int initialize_user_secret_setting(const char *setting_path);
 

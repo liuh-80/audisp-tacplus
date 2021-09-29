@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,18 +18,9 @@ void mock_free(void* ptr);
 #else
 #endif
 
-#define min(a,b)            (((a) < (b)) ? (a) : (b))
-
 /* Macros for have_next_line result */
 #define HAVE_NEXT_SETTING_LINE 1
 #define NO_NEXT_SETTING_LINE   0
-
-/* 
- * Macros for user secret regex
- * These are BRE regex, please refer to: https://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Basic_Regular_Expressions
- */
-#define USER_SECRET_REGEX_WHITE_SPACE              "[[:space:]]*"
-#define USER_SECRET_REGEX_SECRET                   "\\([^[:space:]]*\\)"
 
 /* Macros for parse user input */
 #define USER_COMMAND_TOKEN_WHITESPACE              " \t\n\r\f"
@@ -36,23 +28,17 @@ void mock_free(void* ptr);
 #define USER_COMMAND_TOKEN_EQUAL                   "="
 #define USER_COMMAND_TOKEN_COMMA                   ","
 
-/* Regex match group count, 2 because only have 1 subexpression for user secret */
-#define REGEX_MATCH_GROUP_COUNT      2
-
-/* The user secret mask */
-#define USER_SECRET_MASK                   '*'
-
 /* The command alias prefix */
-static const char* COMMAND_ALIAS = "Cmnd_Alias";
+const char* COMMAND_ALIAS = "Cmnd_Alias";
 
 /* The user secret setting */
-static const char* USER_SECRET_SETTING = "PASSWD_CMDS";
+const char* USER_SECRET_SETTING = "PASSWD_CMDS";
 
 /* Regex list */
 REGEX_NODE *global_regex_list = NULL;
 
 /* Append regex to list */
-int append_regex(regex_t regex)
+int append_regex_to_list(regex_t regex)
 {
     /* Create and initialize regex node */
     REGEX_NODE *new_regex_node = (REGEX_NODE *)malloc(sizeof(REGEX_NODE));
@@ -184,7 +170,7 @@ int append_user_secret_setting(const char *setting_str)
     }
     
     /* Append regex to global list */
-    append_regex(regex);
+    append_regex_to_list(regex);
     
     return INITIALIZE_SUCCESS;
 }
@@ -210,13 +196,13 @@ int initialize_user_secret_setting(const char *setting_path)
             }
             
             /* Not continue check unfinished multiple line settings */
-            if (strncmp(token, COMMAND_ALIAS, sizeof(COMMAND_ALIAS))) {
+            if (strncmp(token, COMMAND_ALIAS, strlen(COMMAND_ALIAS))) {
                 /* Ignore current line when current line is not a command alias */
                 continue;
             }
 
             token = strtok(NULL, USER_COMMAND_TOKEN_SETTING_SPLITTER);
-            if (strncmp(token, USER_SECRET_SETTING, sizeof(USER_SECRET_SETTING))) {
+            if (strncmp(token, USER_SECRET_SETTING, strlen(USER_SECRET_SETTING))) {
                 /* Ignore current line when current line is not a user secret setting */
                 continue;
             }

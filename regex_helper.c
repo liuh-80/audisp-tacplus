@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -16,23 +17,11 @@
 #define USER_SECRET_REGEX_WHITE_SPACE              "[[:space:]]*"
 #define USER_SECRET_REGEX_SECRET                   "\\([^[:space:]]*\\)"
 
-/* Macros for parse user input */
-#define USER_COMMAND_TOKEN_WHITESPACE              " \t\n\r\f"
-#define USER_COMMAND_TOKEN_SETTING_SPLITTER        " =\t"
-#define USER_COMMAND_TOKEN_EQUAL                   "="
-#define USER_COMMAND_TOKEN_COMMA                   ","
-
 /* Regex match group count, 2 because only have 1 subexpression for user secret */
 #define REGEX_MATCH_GROUP_COUNT      2
 
 /* The user secret mask */
 #define USER_SECRET_MASK                   '*'
-
-/* The command alias prefix */
-static const char* COMMAND_ALIAS = "Cmnd_Alias";
-
-/* The user secret setting */
-static const char* USER_SECRET_SETTING = "PASSWD_CMDS";
 
 /* Replace user secret with regex */
 int remove_user_secret_by_regex(const char* command, char* result_buffer, size_t buffer_size, regex_t regex)
@@ -65,7 +54,7 @@ int remove_user_secret_by_regex(const char* command, char* result_buffer, size_t
 /* Convert user secret setting to regex. */
 void convert_secret_setting_to_regex(char *buf, size_t buf_size, const char* secret_setting)
 {
-    int dest_idx = 0, src_idx = 0;
+    int src_idx = 0;
     int last_char_is_whitespace = 0;
 
     /* Reset buffer, make sure following code in while loop can work. */
