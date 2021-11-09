@@ -345,8 +345,7 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-EXTRA_DIST = ChangeLog README audisp_tacplus.spec \
-	audisp-tac_plus.conf audisp-tacplus.conf
+EXTRA_DIST = ChangeLog README audisp_tacplus.spec audisp-tacplus.conf
 
 audisp_tacplus_SOURCES = audisp-tacplus.c
 audisp_tacplus_CFLAGS = -O

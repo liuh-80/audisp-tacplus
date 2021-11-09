@@ -6,7 +6,7 @@ EXTRA_DIST = ChangeLog README audisp_tacplus.spec \
 
 audisp_tacplus_SOURCES = audisp-tacplus.c
 audisp_tacplus_CFLAGS = -O
-audisp_tacplus_LDADD = -lauparse -ltacplus_map
+audisp_tacplus_LDADD = -lauparse -ltacsupport -ltac
 sbin_PROGRAMS = audisp-tacplus
 man_MANS = audisp-tacplus.8
 
@@ -25,9 +25,8 @@ MAINTAINERCLEANFILES = Makefile.in config.h.in configure aclocal.m4 \
 install-data-hook:
 	${INSTALL} -d $(DESTDIR)$(sbindir)/
 	${INSTALL} -m 755 audisp-tacplus $(DESTDIR)$(sbindir)
-	${INSTALL} -d $(DESTDIR)$(sysconfdir)/audisp/plugins.d
+	${INSTALL} -d $(DESTDIR)$(sysconfdir)/audit/plugins.d
 	${INSTALL} -d $(DESTDIR)$(sysconfdir)/audit/rules.d
-	${INSTALL} -m 600 audisp-tac_plus.conf $(DESTDIR)$(sysconfdir)/audisp/
-	${INSTALL} -m 644 audisp-tacplus.conf $(DESTDIR)$(sysconfdir)/audisp/plugins.d
+	${INSTALL} -m 644 audisp-tacplus.conf $(DESTDIR)$(sysconfdir)/audit/plugins.d
 	${INSTALL} -m 644 -o 0 audisp-tacplus.rules $(DESTDIR)$(sysconfdir)/audit/rules.d
 
