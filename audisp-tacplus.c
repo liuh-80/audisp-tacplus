@@ -65,6 +65,8 @@
 /* Tacacs+ support lib */
 #include <libtac/support.h>
 
+/* Remove user secret */
+#include "user_secret.h"
 
 #define _VMAJ 1
 #define _VMIN 0
@@ -84,6 +86,9 @@ const char *unknown_hostname = "UNK";
 
 /* Config file path */
 const char *tacacs_config_file = "/etc/tacplus_nss.conf";
+
+/* User secret setting file */
+const char *sudoers_path = "/etc/sudoers";
 
 /* Local declarations */
 static void handle_event(auparse_state_t *au,
@@ -171,6 +176,10 @@ main(int argc, char *argv[])
 		syslog(LOG_ERR, "exitting due to auparse init errors");
 		return -1;
 	}
+    
+    /* initialize user secret regex setting */
+    initialize_user_secret_setting(sudoers_path);
+
 	auparse_add_callback(au, handle_event, NULL, NULL);
 	do {
 		/* Load configuration */
@@ -198,6 +207,9 @@ main(int argc, char *argv[])
 	/* Flush any accumulated events from queue */
 	auparse_flush_feed(au);
 	auparse_destroy(au);
+
+    /* Release user secret setting */
+    release_user_secret_setting();
 
 	return 0;
 }
@@ -489,10 +501,13 @@ static void get_acct_record(auparse_state_t *au, int type)
      * loguser is always set, we bail if not.  For ANOM_ABEND, tty may be
      *  unknown, and in some cases, host may be not be set.
      */
-    send_tacacs_acct(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
+    char* fixed_log_buffer = remove_user_secret(logbase);
+    send_tacacs_acct(loguser, tty?tty:"UNK", host, (fixed_log_buffer != NULL)?fixed_log_buffer:logbase, acct_type, taskno);
 
     if(freeloguser)
         free(loguser);
+
+    free(fixed_log_buffer);
 }
 
 /*
