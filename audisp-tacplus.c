@@ -68,6 +68,9 @@
 /* Remove user secret */
 #include "user_secret.h"
 
+/* Local accounting */
+#include "local_accounting.h"
+
 #define _VMAJ 1
 #define _VMIN 0
 #define _VPATCH 0
@@ -502,7 +505,13 @@ static void get_acct_record(auparse_state_t *au, int type)
      *  unknown, and in some cases, host may be not be set.
      */
     char* fixed_log_buffer = remove_user_secret(logbase);
-    send_tacacs_acct(loguser, tty?tty:"UNK", host, (fixed_log_buffer != NULL)?fixed_log_buffer:logbase, acct_type, taskno);
+    if (tacacs_ctrl & ACCOUNTING_FLAG_TACACS) {
+        send_tacacs_acct(loguser, tty?tty:"UNK", host, (fixed_log_buffer != NULL)?fixed_log_buffer:logbase, acct_type, taskno);
+    }
+    
+    if (tacacs_ctrl & ACCOUNTING_FLAG_LOCAL) {
+        accounting_to_syslog(loguser, tty?tty:"UNK", host, (fixed_log_buffer != NULL)?fixed_log_buffer:logbase, acct_type, taskno);
+    }
 
     if(freeloguser)
         free(loguser);

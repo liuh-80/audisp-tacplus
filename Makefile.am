@@ -4,7 +4,7 @@
 EXTRA_DIST = ChangeLog README audisp_tacplus.spec \
 	audisp-tac_plus.conf audisp-tacplus.conf
 
-audisp_tacplus_SOURCES = audisp-tacplus.c user_secret.c regex_helper.c trace.c
+audisp_tacplus_SOURCES = audisp-tacplus.c user_secret.c regex_helper.c trace.c local_accounting.c
 audisp_tacplus_CFLAGS = -O
 audisp_tacplus_LDADD = -lauparse -ltacsupport -ltac
 sbin_PROGRAMS = audisp-tacplus
@@ -27,7 +27,6 @@ install-data-hook:
 	${INSTALL} -m 755 audisp-tacplus $(DESTDIR)$(sbindir)
 	${INSTALL} -d $(DESTDIR)$(sysconfdir)/audisp/plugins.d
 	${INSTALL} -d $(DESTDIR)$(sysconfdir)/audit/rules.d
-	${INSTALL} -m 600 audisp-tac_plus.conf $(DESTDIR)$(sysconfdir)/audisp/
 	${INSTALL} -m 644 audisp-tacplus.conf $(DESTDIR)$(sysconfdir)/audisp/plugins.d
 	${INSTALL} -m 644 -o 0 audisp-tacplus.rules $(DESTDIR)$(sysconfdir)/audit/rules.d
 
