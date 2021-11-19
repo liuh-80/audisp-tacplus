@@ -13,23 +13,19 @@
 #define REGEX_APPEND_SUCCESS              0
 #define REGEX_APPEND_FAILED               1
 
-/* Regex fix result. */
-#define USER_SECRET_FIXED                 0
-#define USER_SECRET_NOT_FOUND             1
-
 /* Regex list node. */
 typedef struct regex_node {
     struct regex_node *next;
     regex_t regex;
 } REGEX_NODE;
 
-/* Initialize user secret setting */
-extern int initialize_user_secret_setting(const char *setting_path);
+/* Initialize password setting */
+extern int initialize_password_setting(const char *setting_path);
 
-/* Release user secret setting */
-extern void release_user_secret_setting();
+/* Release password setting */
+extern void release_password_setting();
 
-/* Replace user secret with regex */
-extern char * remove_user_secret(const char* command);
+/* Replace password with regex */
+extern void remove_password(char* command);
 
 #endif /* USER_SECRED_H */

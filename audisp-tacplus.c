@@ -59,14 +59,14 @@
 #include <unistd.h>
 #include <limits.h>
 
-
 #include <libtac/libtac.h>
+#include <trace.h>
 
 /* Tacacs+ support lib */
 #include <libtac/support.h>
 
-/* Remove user secret */
-#include "user_secret.h"
+/* Remove password */
+#include "password.h"
 
 /* Local accounting */
 #include "local_accounting.h"
@@ -90,7 +90,7 @@ const char *unknown_hostname = "UNK";
 /* Config file path */
 const char *tacacs_config_file = "/etc/tacplus_nss.conf";
 
-/* User secret setting file */
+/* sudoers file conatins user password setting */
 const char *sudoers_path = "/etc/sudoers";
 
 /* Local declarations */
@@ -126,6 +126,26 @@ reload_config(void)
 
     /* load config file: tacacs_config_file */
     tacacs_ctrl = parse_config_file(tacacs_config_file);
+
+    trace("tacacs config updated:\n");
+    int server_idx;
+    for(server_idx = 0; server_idx < tac_srv_no; server_idx++) {
+        trace("Server %d, address:%s, key length:%d\n", server_idx, tac_ntop(tac_srv[server_idx].addr->ai_addr),strlen(tac_srv[server_idx].key));
+    }
+
+    trace("TACACS+ control flag: 0x%x\n", tacacs_ctrl);
+    
+    if (tacacs_ctrl & AUTHORIZATION_FLAG_TACACS) {
+        trace("TACACS+ per-command authorization enabled.\n");
+    }
+
+    if (tacacs_ctrl & AUTHORIZATION_FLAG_LOCAL) {
+        trace("Local per-command authorization enabled.\n");
+    }
+    
+    if (tacacs_ctrl & PAM_TAC_DEBUG) {
+        trace("TACACS+ debug enabled.\n");
+    }
 }
 
 /*
@@ -180,8 +200,8 @@ main(int argc, char *argv[])
 		return -1;
 	}
     
-    /* initialize user secret regex setting */
-    initialize_user_secret_setting(sudoers_path);
+    /* initialize password regex setting */
+    initialize_password_setting(sudoers_path);
 
 	auparse_add_callback(au, handle_event, NULL, NULL);
 	do {
@@ -211,8 +231,8 @@ main(int argc, char *argv[])
 	auparse_flush_feed(au);
 	auparse_destroy(au);
 
-    /* Release user secret setting */
-    release_user_secret_setting();
+    /* Release password setting */
+    release_password_setting();
 
 	return 0;
 }
@@ -504,19 +524,17 @@ static void get_acct_record(auparse_state_t *au, int type)
      * loguser is always set, we bail if not.  For ANOM_ABEND, tty may be
      *  unknown, and in some cases, host may be not be set.
      */
-    char* fixed_log_buffer = remove_user_secret(logbase);
+    remove_password(logbase);
     if (tacacs_ctrl & ACCOUNTING_FLAG_TACACS) {
-        send_tacacs_acct(loguser, tty?tty:"UNK", host, (fixed_log_buffer != NULL)?fixed_log_buffer:logbase, acct_type, taskno);
+        send_tacacs_acct(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
     }
     
     if (tacacs_ctrl & ACCOUNTING_FLAG_LOCAL) {
-        accounting_to_syslog(loguser, tty?tty:"UNK", host, (fixed_log_buffer != NULL)?fixed_log_buffer:logbase, acct_type, taskno);
+        accounting_to_syslog(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
     }
 
     if(freeloguser)
         free(loguser);
-
-    free(fixed_log_buffer);
 }
 
 /*

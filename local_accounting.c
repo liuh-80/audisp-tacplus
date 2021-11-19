@@ -13,7 +13,5 @@
 /* Write the accounting information to syslog. */
 void accounting_to_syslog(char *user, char *tty, char *host, char *cmdmsg, int type, uint16_t task_id)
 {
-    char accounting_buffer[MAX_LINE_SIZE];
-    snprintf(accounting_buffer, sizeof(accounting_buffer), ACCOUNTING_LOG_FORMAT, user, tty, host, cmdmsg, type, task_id);
-    syslog(LOG_INFO, "%s", accounting_buffer);
+    trace(ACCOUNTING_LOG_FORMAT, user, tty, host, cmdmsg, type, task_id);
 }

@@ -21,7 +21,7 @@
 #if !defined (_MOCK_HELPER_H_)
 #define _MOCK_HELPER_H_
 
-#include "user_secret.h"
+#include "password.h"
 
 // define USER_SECRET_UT_DEBUG to output UT debug message.
 #define USER_SECRET_UT_DEBUG

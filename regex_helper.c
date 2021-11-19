@@ -5,82 +5,88 @@
 #include <syslog.h>
 #include <stdlib.h>
 
-#include "user_secret.h"
+#include "regex_helper.h"
 #include "trace.h"
 
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
 
 /* 
- * Macros for user secret regex
+ * Macros for password regex
  * These are BRE regex, please refer to: https://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Basic_Regular_Expressions
+ REGEX_WHITESPACES will match the whitespace in user commands.
+ REGEX_TOKEN will match password or connection string in user commands
  */
-#define USER_SECRET_REGEX_WHITE_SPACE              "[[:space:]]*"
-#define USER_SECRET_REGEX_SECRET                   "\\([^[:space:]]*\\)"
+#define REGEX_WHITESPACES              "[[:space:]]*"
+#define REGEX_TOKEN                   "\\([^[:space:]]*\\)"
 
-/* Regex match group count, 2 because only have 1 subexpression for user secret */
+/* Regex match group count, 2 because only have 1 subexpression for password */
 #define REGEX_MATCH_GROUP_COUNT      2
 
-/* The user secret mask */
-#define USER_SECRET_MASK                   '*'
+/* The password mask */
+#define PASSWORD_MASK                   '*'
 
-/* Replace user secret with regex */
-char * remove_user_secret_by_regex(const char* command, regex_t regex)
+/* Remove password from command. */
+int remove_password_by_regex(char* command, regex_t regex)
 {
     regmatch_t pmatch[REGEX_MATCH_GROUP_COUNT];
     if (regexec(&regex, command, REGEX_MATCH_GROUP_COUNT, pmatch, 0) == REG_NOMATCH) {
         trace("User command not match.\n");
-        return NULL;
+        return PASSWORD_NOT_FOUND;
     }
 
     if (pmatch[1].rm_so < 0) {
-        trace("User secret not found.\n");
-        return NULL;
+        trace("Password not found.\n");
+        return PASSWORD_NOT_FOUND;
     }
 
-    /* Found user secret between pmatch[1].rm_so to pmatch[1].rm_eo, replace it. */
-    trace("Found user secret between: %d -- %d\n", pmatch[1].rm_so, pmatch[1].rm_eo);
-    int result_buffer_size = strlen(command) + 1;
-    char * result_buffer = malloc(result_buffer_size);
-    snprintf(result_buffer, result_buffer_size, "%s", command);
+    /* Found password between pmatch[1].rm_so to pmatch[1].rm_eo, replace it. */
+    trace("Found password between: %d -- %d\n", pmatch[1].rm_so, pmatch[1].rm_eo);
 
-    /* Replace user secret with mask. */
-    int secret_start_pos = min(pmatch[1].rm_so, result_buffer_size - 1);
-    int secret_count = min(pmatch[1].rm_eo, result_buffer_size - 1) - secret_start_pos;
-    memset(result_buffer + secret_start_pos, USER_SECRET_MASK, secret_count);
+    /* Replace password with mask. */
+    size_t command_length = strlen(command);
+    int password_start_pos = min(pmatch[1].rm_so, command_length);
+    int password_count = min(pmatch[1].rm_eo, command_length) - password_start_pos;
+    memset(command + password_start_pos, PASSWORD_MASK, password_count);
 
-    return result_buffer;
+    return PASSWORD_REMOVED;
 }
 
-/* Convert user secret setting to regex. */
-void convert_secret_setting_to_regex(char *buf, size_t buf_size, const char* secret_setting)
+/* 
+    Convert password command to regex.
+    Password commands defined in sudoers file, the PASSWD_CMD alias is a list of password command.
+    For more information please check:
+    https://www.sudo.ws/man/1.7.10/sudoers.man.html
+    https://github.com/Azure/sonic-buildimage/blob/5c503b81ae186aa378928edf36fa1d347e919d7a/files/image_config/sudoers/sudoers
+ */
+void convert_passwd_cmd_to_regex(char *buf, size_t buf_size, const char* password_setting)
 {
     int src_idx = 0;
     int last_char_is_whitespace = 0;
 
     memset(buf, 0, buf_size);
-    while (secret_setting[src_idx]) {
+    while (password_setting[src_idx]) {
         int buffer_used_space= strlen(buf);
-        if (secret_setting[src_idx] == USER_SECRET_MASK) {
-            /* Replace * to USER_SECRET_REGEX_SECRET */
-            snprintf(buf + buffer_used_space, buf_size - buffer_used_space,USER_SECRET_REGEX_SECRET);
+        if (password_setting[src_idx] == PASSWORD_MASK) {
+            /* Replace * to REGEX_TOKEN */
+            snprintf(buf + buffer_used_space, buf_size - buffer_used_space,REGEX_TOKEN);
         }
-        else if (isspace(secret_setting[src_idx])) {
+        else if (isspace(password_setting[src_idx])) {
             /* Ignore mutiple whitespace */
             if (!last_char_is_whitespace) {
-                /* Replace whitespace to regex USER_SECRET_REGEX_WHITE_SPACE which match multiple whitespace */
-                snprintf(buf + buffer_used_space, buf_size - buffer_used_space,USER_SECRET_REGEX_WHITE_SPACE);
+                /* Replace whitespace to regex REGEX_WHITESPACES which match multiple whitespace */
+                snprintf(buf + buffer_used_space, buf_size - buffer_used_space,REGEX_WHITESPACES);
             }
         }
         else if (buffer_used_space < buf_size - 1){
-            /* Copy none user secret characters */
-            buf[buffer_used_space] = secret_setting[src_idx];
+            /* Copy none password characters */
+            buf[buffer_used_space] = password_setting[src_idx];
         }
         else {
             /* Buffer full, return here. */
             return;
         }
 
-        last_char_is_whitespace = isspace(secret_setting[src_idx]);
+        last_char_is_whitespace = isspace(password_setting[src_idx]);
         src_idx++;
     }
 }
