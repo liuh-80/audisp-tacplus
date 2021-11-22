@@ -37,7 +37,7 @@ void testcase_load_password_setting() {
 
     release_password_setting();
 
-    CU_ASSERT_EQUAL(loaded_regex_count, 2);
+    CU_ASSERT_EQUAL(loaded_regex_count, 3);
 }
 
 /* Test convert setting string to regex string*/
@@ -92,6 +92,12 @@ void testcase_fix_password() {
 
     debug_printf("Fixed command: %s\n", result_buffer);
     CU_ASSERT_STRING_EQUAL(result_buffer, "/usr/sbin/chpasswd   **********");
+
+    snprintf(result_buffer, sizeof(result_buffer), "%s", "/usr/sbin/setpasswd   testsecret");
+    remove_password(result_buffer);
+
+    debug_printf("Fixed command: %s\n", result_buffer);
+    CU_ASSERT_STRING_EQUAL(result_buffer, "/usr/sbin/setpasswd   **********");
 
     /* Regular command not change */
     snprintf(result_buffer, sizeof(result_buffer), "%s", "command no password");

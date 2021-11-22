@@ -68,16 +68,16 @@ void convert_passwd_cmd_to_regex(char *buf, size_t buf_size, const char* passwor
         int buffer_used_space= strlen(buf);
         if (password_setting[src_idx] == PASSWORD_MASK) {
             /* Replace * to REGEX_TOKEN */
-            snprintf(buf + buffer_used_space, buf_size - buffer_used_space,REGEX_TOKEN);
+            snprintf(buf + buffer_used_space, buf_size - buffer_used_space, REGEX_TOKEN);
         }
         else if (isspace(password_setting[src_idx])) {
             /* Ignore mutiple whitespace */
             if (!last_char_is_whitespace) {
                 /* Replace whitespace to regex REGEX_WHITESPACES which match multiple whitespace */
-                snprintf(buf + buffer_used_space, buf_size - buffer_used_space,REGEX_WHITESPACES);
+                snprintf(buf + buffer_used_space, buf_size - buffer_used_space, REGEX_WHITESPACES);
             }
         }
-        else if (buffer_used_space < buf_size - 1){
+        else if (buffer_used_space < buf_size - 1) {
             /* Copy none password characters */
             buf[buffer_used_space] = password_setting[src_idx];
         }

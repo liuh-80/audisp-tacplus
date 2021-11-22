@@ -45,5 +45,4 @@ void set_memory_allocate_count(int count);
 /* Get memory allocate count for test*/
 int get_memory_allocate_count();
 
-
 #endif /* _MOCK_HELPER_H_ */

@@ -13,6 +13,10 @@
 #define REGEX_APPEND_SUCCESS              0
 #define REGEX_APPEND_FAILED               1
 
+/* Macros for have_next_line result */
+#define HAVE_NEXT_SETTING_LINE 1
+#define NO_NEXT_SETTING_LINE   0
+
 /* Regex list node. */
 typedef struct regex_node {
     struct regex_node *next;

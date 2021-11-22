@@ -374,7 +374,7 @@ static void get_acct_record(auparse_state_t *au, int type)
     char logbuf[240], *logptr, *logbase;
 
     /* get hostname. */
-    char host[HOST_NAME_MAX];
+    char host[HOST_NAME_MAX+1];
     memset(host, 0, sizeof(host));
     if (gethostname(host, sizeof(host)) != 0)
     {

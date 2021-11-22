@@ -37,13 +37,23 @@ int get_memory_allocate_count()
     return memory_allocate_count;
 }
 
-
 /* MOCK malloc method*/
 void *mock_malloc(size_t size)
 {
     memory_allocate_count++;
     debug_printf("MOCK: malloc %ld bytes memory count: %d\n", size, memory_allocate_count);
     return malloc(size);
+}
+
+/* MOCK malloc method*/
+void *mock_realloc(void* ptr, size_t size)
+{
+    if (ptr == NULL) {
+        memory_allocate_count++;
+    }
+
+    debug_printf("MOCK: realloc %ld bytes memory count: %d\n", size, memory_allocate_count);
+    return realloc(ptr, size);
 }
 
 /* MOCK free method*/
