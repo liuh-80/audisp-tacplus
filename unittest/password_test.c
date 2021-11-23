@@ -6,6 +6,7 @@
 
 #include "mock_helper.h"
 #include "regex_helper.h"
+#include "sudoers_helper.h"
 #include "trace.h"
 #include "password.h"
 

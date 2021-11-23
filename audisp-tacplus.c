@@ -81,14 +81,10 @@ static volatile int hup = 0;
 static auparse_state_t *au = NULL;
 static unsigned connected_ok;
 
+char *configfile = "/etc/audisp/audisp-tac_plus.conf";
+
 /* Tacacs control flag */
 int tacacs_ctrl;
-
-/* Uniknown host name */
-const char *unknown_hostname = "UNK";
-
-/* Config file path */
-const char *tacacs_config_file = "/etc/tacplus_nss.conf";
 
 /* sudoers file conatins user password setting */
 const char *sudoers_path = "/etc/sudoers";
@@ -124,8 +120,8 @@ reload_config(void)
 
     connected_ok = 0; /*  reset connected state (for possible vrf) */
 
-    /* load config file: tacacs_config_file */
-    tacacs_ctrl = parse_config_file(tacacs_config_file);
+    /* load config file: configfile */
+    tacacs_ctrl = parse_config_file(configfile);
 
     trace("tacacs config updated:\n");
     int server_idx;
@@ -151,25 +147,37 @@ reload_config(void)
 /*
  * Get user name by UID, and return NULL when not found user name by UID.
  * The returned username should be free by caller.
+ * Also assign hostname to host, the host also should be free by caller.
  */
-char *lookup_logname(uid_t auid)
+char *lookup_logname(uid_t auid, char** host)
 {
+    /* get user name. */
     struct passwd *pws;
     pws = getpwuid(auid);
     if (pws == NULL) {
         /* Failed to get user information. */
         return NULL;
     }
-    
+
     int new_buffer_size = strlen(pws->pw_name) + 1;
     char* username = malloc(new_buffer_size);
     if (username == NULL) {
         /* Failed to allocate new buffer. */
         return NULL;
     }
-    
+
     memset(username, 0, new_buffer_size);
     strncpy(username, pws->pw_name, new_buffer_size-1);
+
+    /* get hostname. */
+    *host = malloc(HOST_NAME_MAX+1);
+    memset(*host, 0, HOST_NAME_MAX+1);
+    if (gethostname(*host, HOST_NAME_MAX) != 0)
+    {
+        free(*host);
+        *host = NULL;
+    }
+
     return username;
 }
 
@@ -182,6 +190,9 @@ main(int argc, char *argv[])
     /* initialize random seed*/
     srand(time(NULL));
 
+    /* if there is an argument, it is an alternate configuration file */
+    if(argc > 1)
+        configfile = argv[1];
     reload_config();
 
 	/* Register sighandlers */
@@ -369,17 +380,9 @@ static void get_acct_record(auparse_state_t *au, int type)
     pid_t pid;
     uint16_t taskno;
     unsigned argc=0, session=0, auid;
-    char *auser = NULL, *loguser, *tty = NULL;
+    char *auser = NULL, *loguser, *tty = NULL, *host = NULL;
     char *cmd = NULL, *ausyscall = NULL;
     char logbuf[240], *logptr, *logbase;
-
-    /* get hostname. */
-    char host[HOST_NAME_MAX+1];
-    memset(host, 0, sizeof(host));
-    if (gethostname(host, sizeof(host)) != 0)
-    {
-        strncpy(host, unknown_hostname, sizeof(host)-1);
-    }
 
     if(get_field(au, "syscall"))
         ausyscall = (char *)auparse_interpret_field(au);
@@ -439,7 +442,7 @@ static void get_acct_record(auparse_state_t *au, int type)
      * the NSS library, the username in auser will likely already be the login
      * name.
      */
-    loguser = lookup_logname(auid);
+    loguser = lookup_logname(auid, &host);
     if(!loguser) {
         char *user = NULL;
 
@@ -526,12 +529,15 @@ static void get_acct_record(auparse_state_t *au, int type)
      */
     remove_password(logbase);
     if (tacacs_ctrl & ACCOUNTING_FLAG_TACACS) {
-        send_tacacs_acct(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
+        send_tacacs_acct(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
     }
     
     if (tacacs_ctrl & ACCOUNTING_FLAG_LOCAL) {
-        accounting_to_syslog(loguser, tty?tty:"UNK", host, logbase, acct_type, taskno);
+        accounting_to_syslog(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
     }
+
+    if(host)
+        free(host);
 
     if(freeloguser)
         free(loguser);
