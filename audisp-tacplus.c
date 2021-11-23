@@ -65,6 +65,10 @@
 /* Tacacs+ support lib */
 #include <libtac/support.h>
 
+/* Remove password from user command */
+#include "password.h"
+#include "sudoers_helper.h"
+
 #define _VMAJ 1
 #define _VMIN 0
 #define _VPATCH 0
@@ -79,6 +83,9 @@ char *configfile = "/etc/audisp/audisp-tac_plus.conf";
 
 /* Tacacs control flag */
 int tacacs_ctrl;
+
+/* sudoers file conatins user password setting */
+const char *sudoers_path = "/etc/sudoers";
 
 /* Local declarations */
 static void handle_event(auparse_state_t *au,
@@ -162,8 +169,8 @@ char *lookup_logname(uid_t auid, char** host)
 
     /* get hostname. */
     *host = malloc(HOST_NAME_MAX+1);
-    memset(host, 0, HOST_NAME_MAX+1);
-    if (gethostname(host, HOST_NAME_MAX) != 0)
+    memset(*host, 0, HOST_NAME_MAX+1);
+    if (gethostname(*host, HOST_NAME_MAX) != 0)
     {
         free(*host);
         *host = NULL;
@@ -201,6 +208,10 @@ main(int argc, char *argv[])
 		syslog(LOG_ERR, "exitting due to auparse init errors");
 		return -1;
 	}
+    
+    /* initialize password regex setting */
+    initialize_password_setting(sudoers_path);
+
 	auparse_add_callback(au, handle_event, NULL, NULL);
 	do {
 		/* Load configuration */
@@ -228,6 +239,9 @@ main(int argc, char *argv[])
 	/* Flush any accumulated events from queue */
 	auparse_flush_feed(au);
 	auparse_destroy(au);
+
+    /* Release password setting */
+    release_password_setting();
 
 	return 0;
 }
@@ -511,6 +525,7 @@ static void get_acct_record(auparse_state_t *au, int type)
      * loguser is always set, we bail if not.  For ANOM_ABEND, tty may be
      *  unknown, and in some cases, host may be not be set.
      */
+    remove_password(logbase);
     send_tacacs_acct(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
 
     if(host)
