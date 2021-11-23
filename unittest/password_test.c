@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
 
@@ -38,7 +39,7 @@ void testcase_load_password_setting() {
 
     release_password_setting();
 
-    CU_ASSERT_EQUAL(loaded_regex_count, 3);
+    CU_ASSERT_EQUAL(loaded_regex_count, 4);
 }
 
 /* Test convert setting string to regex string*/
@@ -100,6 +101,13 @@ void testcase_fix_password() {
     debug_printf("Fixed command: %s\n", result_buffer);
     CU_ASSERT_STRING_EQUAL(result_buffer, "/usr/sbin/setpasswd   **********");
 
+    /* In sudoers file PASSWD_CMD cross multiple line should handle correctly */
+    snprintf(result_buffer, sizeof(result_buffer), "%s", "/usr/sbin/unfinishedcommand testsecret ,");
+    remove_password(result_buffer);
+
+    debug_printf("Fixed command: %s\n", result_buffer);
+    CU_ASSERT_STRING_EQUAL(result_buffer, "/usr/sbin/unfinishedcommand ********** ,");
+
     /* Regular command not change */
     snprintf(result_buffer, sizeof(result_buffer), "%s", "command no password");
     remove_password(result_buffer);
@@ -117,6 +125,43 @@ void testcase_release_all_regex() {
 
     /* All memory should free */
     CU_ASSERT_EQUAL(get_memory_allocate_count(), 0);
+}
+
+/* Test for have_next_line method */
+void testcase_have_next_line() {
+    CU_ASSERT_EQUAL(have_next_line("Have next line \\"), true);
+
+    CU_ASSERT_EQUAL(have_next_line("Not have next line \\\\"), false);
+
+    CU_ASSERT_EQUAL(have_next_line("Have next line \\\\\\"), true);
+}
+
+/* Test for escape_characters method */
+void testcase_escape_characters() {
+    char buffer[MAX_LINE_SIZE];
+
+    snprintf(buffer, sizeof(buffer), "%s", "Test string \\\\");
+    escape_characters(buffer);
+    printf(buffer);
+    CU_ASSERT_TRUE(strcmp(buffer, "Test string \\") == 0);
+    CU_ASSERT_STRING_EQUAL(buffer, "Test string \\");
+
+    snprintf(buffer, sizeof(buffer), "%s", "Test string \\,");
+    escape_characters(buffer);
+    CU_ASSERT_STRING_EQUAL(buffer, "Test string ,");
+
+    snprintf(buffer, sizeof(buffer), "%s", "Test string \\\\\\,");
+    escape_characters(buffer);
+    CU_ASSERT_STRING_EQUAL(buffer, "Test string \\,");
+
+    /* Following case should not escape */
+    snprintf(buffer, sizeof(buffer), "%s", "Test string \\:");
+    escape_characters(buffer);
+    CU_ASSERT_STRING_EQUAL(buffer, "Test string \\:");
+
+    snprintf(buffer, sizeof(buffer), "%s", "Test string \\.");
+    escape_characters(buffer);
+    CU_ASSERT_STRING_EQUAL(buffer, "Test string \\.");
 }
 
 int main(void) {
@@ -139,7 +184,9 @@ int main(void) {
       || !CU_add_test(ste, "Test testcase_convert_passwd_cmd_to_regex()...\n", testcase_convert_passwd_cmd_to_regex)
       || !CU_add_test(ste, "Test testcase_fix_password_by_regex()...\n", testcase_fix_password_by_regex)
       || !CU_add_test(ste, "Test testcase_fix_password()...\n", testcase_fix_password)
-      || !CU_add_test(ste, "Test testcase_release_all_regex()...\n", testcase_release_all_regex)) {
+      || !CU_add_test(ste, "Test testcase_release_all_regex()...\n", testcase_release_all_regex)
+      || !CU_add_test(ste, "Test testcase_have_next_line()...\n", testcase_have_next_line)
+      || !CU_add_test(ste, "Test testcase_escape_characters()...\n", testcase_escape_characters)) {
     CU_cleanup_registry();
         return CU_get_error();
     }

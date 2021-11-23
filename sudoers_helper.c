@@ -15,7 +15,7 @@
 #define USER_COMMAND_TOKEN_EQUAL                   "="
 #define USER_COMMAND_TOKEN_COMMA                   ","
 
-#define BUFFER_CRLF              "\n\r"
+#define BUFFER_LF              "\n"
 
 /* The command alias prefix */
 const char* COMMAND_ALIAS = "Cmnd_Alias";
@@ -33,11 +33,38 @@ char* append_string_to_buffer(char* buffer, char* str)
     }
 
     buffer = realloc(buffer, buffer_len + str_len + 1);
+    if (buffer == NULL) {
+        trace("Reallocate memory for string: %s failed.\n", str);
+        return NULL;
+    }
 
     memcpy(buffer + buffer_len, str, str_len);
     buffer[buffer_len + str_len] = 0;
 
     return buffer;
+}
+
+/*
+    Check if have next line, need handle the escape backslash case, for example:
+        Not have next line:  example line \\\\
+        Have next line:  example line \\\
+    For more information, please check:
+        Long lines can be continued with a backslash (‘\’) as the last character on the line.
+        https://www.sudo.ws/man/1.8.17/sudoers.man.html#Other_special_characters_and_reserved_words
+*/
+bool have_next_line(const char *str)
+{
+    int count = 0;
+    int index = strlen(str) - 1;
+    for (;index >= 0; index--) {
+        if (str[index] != '\\') {
+            break;
+        }
+        
+        count++;
+    }
+
+    return count % 2;
 }
 
 /*
@@ -47,7 +74,7 @@ char* append_string_to_buffer(char* buffer, char* str)
 */
 char* load_passwd_cmds(const char *setting_path)
 {
-    FILE *setting_file= fopen(setting_path, "r");
+    FILE *setting_file= fopen(setting_path, "rt");
     if(setting_file == NULL) {
         trace("Can't open setting file: %s\n", setting_path);
         return NULL;
@@ -56,9 +83,9 @@ char* load_passwd_cmds(const char *setting_path)
     int continue_load_password = NO_NEXT_SETTING_LINE;
     char *passwd_cmds = NULL;
     char line_buffer[MAX_LINE_SIZE+1];
-    while (fgets(line_buffer, sizeof line_buffer, setting_file)) {
-        /* Remove \r\n from buffer */
-        line_buffer[strcspn(line_buffer, BUFFER_CRLF)] = 0;
+    while (fgets(line_buffer, sizeof(line_buffer), setting_file)) {
+        /* Remove \n from buffer */
+        line_buffer[strcspn(line_buffer, BUFFER_LF)] = 0;
 
         char* token;
         if (continue_load_password == NO_NEXT_SETTING_LINE) {
@@ -87,15 +114,11 @@ char* load_passwd_cmds(const char *setting_path)
             token = line_buffer;
         }
 
-        /*
-            Check if have next line
-            For more information, please check:
-                Long lines can be continued with a backslash (‘\’) as the last character on the line.
-                https://www.sudo.ws/man/1.8.17/sudoers.man.html#Other_special_characters_and_reserved_words
-        */
-        int cmd_len = strlen(token);
-        if (cmd_len > 0 && token[cmd_len-1] == '\\') {
+        if (have_next_line(token)) {
             continue_load_password = HAVE_NEXT_SETTING_LINE;
+
+            /* Remove the last backslash */
+            int cmd_len = strlen(token);
             token[cmd_len-1] = 0;
         }
         else {
@@ -104,6 +127,10 @@ char* load_passwd_cmds(const char *setting_path)
 
         /* Append PASSWD_CMDS to buffer*/
         passwd_cmds = append_string_to_buffer(passwd_cmds, token);
+        if (passwd_cmds == NULL) {
+            trace("Append PASSWD_CMDS to buffer failed.\n");
+            break;
+        }
     }
 
     fclose(setting_file);
@@ -126,7 +153,7 @@ void escape_characters(char *str)
             if (dest_pos != src_pos) {
                 *dest_pos = *src_pos;
             }
-            
+
             src_pos++;
             dest_pos++;
             continue;
@@ -143,6 +170,7 @@ void escape_characters(char *str)
             || *src_pos == '\\') {
             *dest_pos = *src_pos;
             dest_pos++;
+            src_pos++;
             continue;
         }
 
@@ -176,7 +204,7 @@ int handle_passwd_cmd(char *passwd_cmd)
     if (result != INITIALIZE_SUCCESS) {
         trace("Append password regex failed: %s, result: %d\n", passwd_cmd, result);
     }
-    
+
     return result;
 }
 
@@ -200,9 +228,10 @@ int initialize_password_setting(const char *setting_path)
     int backslash_count = 0;
     char* passwd_cmd = passwd_cmds;
     bool start_new_passwd_cmd = true;
-    for (int index=0; index <= passwd_cmds_length; index++) {
+    for (int index=0; index < passwd_cmds_length; index++) {
         if (passwd_cmds[index] == '\\') {
             backslash_count++;
+            continue;
         }
         else if (passwd_cmds[index] != ',') {
             backslash_count = 0;
@@ -221,15 +250,15 @@ int initialize_password_setting(const char *setting_path)
         }
 
         /*
-            Comma is a splitter when there are even number of backslash, for example \\, or \\\\,
+            Comma is a splitter when there are even number of backslash before it, for example \\, or \\\\,
         */
-        bool comma_is_splitter = backslash_count % 2;
+        bool comma_is_splitter = backslash_count % 2 == 0;
         backslash_count = 0;
-        if (comma_is_splitter) {
+        if (!comma_is_splitter) {
             continue;
         }
 
-        /* We have a comma */
+        /* Found a comma splitter, handle current passwd_cmd. */
         passwd_cmds[index] = 0;
         result = handle_passwd_cmd(passwd_cmd);
         if (result != INITIALIZE_SUCCESS) {
@@ -243,7 +272,7 @@ int initialize_password_setting(const char *setting_path)
         passwd_cmd = NULL;
         start_new_passwd_cmd = true;
     }
-    
+
     /*
         Handle following 2 cases:
             1. Comma splitter not exist in PASSWD_CMDS
