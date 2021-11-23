@@ -69,6 +69,9 @@
 #include "password.h"
 #include "sudoers_helper.h"
 
+/* Local accounting */
+#include "local_accounting.h"
+
 #define _VMAJ 1
 #define _VMIN 0
 #define _VPATCH 0
@@ -526,7 +529,13 @@ static void get_acct_record(auparse_state_t *au, int type)
      *  unknown, and in some cases, host may be not be set.
      */
     remove_password(logbase);
-    send_tacacs_acct(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
+    if (tacacs_ctrl & ACCOUNTING_FLAG_TACACS) {
+        send_tacacs_acct(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
+    }
+    
+    if (tacacs_ctrl & ACCOUNTING_FLAG_LOCAL) {
+        accounting_to_syslog(loguser, tty?tty:"UNK", host?host:"UNK", logbase, acct_type, taskno);
+    }
 
     if(host)
         free(host);
