@@ -1,16 +1,6 @@
 #ifndef SUDOERS_HELPER_H
 #define SUDOERS_HELPER_H
 
-/* Macros for have_next_line result */
-#define HAVE_NEXT_SETTING_LINE 1
-#define NO_NEXT_SETTING_LINE   0
-
-/* passwd_cmd list node. */
-typedef struct passwd_cmd_node {
-    struct passwd_cmd_node *next;
-    char* passwd_cmd;
-} PASSWD_CMD_NODE;
-
 /* Load PASSWD_CMDS from sudoers. */
 char* load_passwd_cmds(const char *setting_path);
 

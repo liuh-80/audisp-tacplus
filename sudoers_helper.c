@@ -15,7 +15,7 @@
 #define USER_COMMAND_TOKEN_EQUAL                   "="
 #define USER_COMMAND_TOKEN_COMMA                   ","
 
-#define BUFFER_LF              "\n"
+#define PASSWD_CMDS_SPLITTER                       '\n'
 
 /* The command alias prefix */
 const char* COMMAND_ALIAS = "Cmnd_Alias";
@@ -55,7 +55,8 @@ char* append_string_to_buffer(char* buffer, char* str)
 bool have_next_line(const char *str)
 {
     int count = 0;
-    int index = strlen(str) - 1;
+    /* Use -2 to ignore check last character, because it will always be \n */
+    int index = strlen(str) - 2;
     for (;index >= 0; index--) {
         if (str[index] != '\\') {
             break;
@@ -80,15 +81,15 @@ char* load_passwd_cmds(const char *setting_path)
         return NULL;
     }
 
-    int continue_load_password = NO_NEXT_SETTING_LINE;
+    bool load_next_line = false;
     char *passwd_cmds = NULL;
     char line_buffer[MAX_LINE_SIZE+1];
     while (fgets(line_buffer, sizeof(line_buffer), setting_file)) {
-        /* Remove \n from buffer */
-        line_buffer[strcspn(line_buffer, BUFFER_LF)] = 0;
-
         char* token;
-        if (continue_load_password == NO_NEXT_SETTING_LINE) {
+        if (load_next_line) {
+            token = line_buffer;
+        }
+        else {
             token = strtok(line_buffer, USER_COMMAND_TOKEN_WHITESPACE);
             if (!token) {
                 /* Empty line will not get any token */
@@ -110,20 +111,8 @@ char* load_passwd_cmds(const char *setting_path)
             /* Get password setting content */
             token = strtok(NULL, USER_COMMAND_TOKEN_EQUAL);
         }
-        else {
-            token = line_buffer;
-        }
 
-        if (have_next_line(token)) {
-            continue_load_password = HAVE_NEXT_SETTING_LINE;
-
-            /* Remove the last backslash */
-            int cmd_len = strlen(token);
-            token[cmd_len-1] = 0;
-        }
-        else {
-            continue_load_password = NO_NEXT_SETTING_LINE;
-        }
+        load_next_line = have_next_line(token);
 
         /* Append PASSWD_CMDS to buffer*/
         passwd_cmds = append_string_to_buffer(passwd_cmds, token);
@@ -134,6 +123,8 @@ char* load_passwd_cmds(const char *setting_path)
     }
 
     fclose(setting_file);
+
+    escape_characters(passwd_cmds);
     return passwd_cmds;
 }
 
@@ -148,8 +139,15 @@ void escape_characters(char *str)
     char *src_pos=str;
     char *dest_pos=str;
     while (*src_pos) {
-        /* copy none escape characters */
-        if (*src_pos != '\\') {
+        if (*src_pos == ',') {
+            /* PASSWD_CMDS use comma as splitter, replace it wiith \n to simplify split handling */
+            *dest_pos = PASSWD_CMDS_SPLITTER;
+            src_pos++;
+            dest_pos++;
+            continue;
+        }
+        else if (*src_pos != '\\') {
+            /* copy none escape characters */
             if (dest_pos != src_pos) {
                 *dest_pos = *src_pos;
             }
@@ -161,17 +159,23 @@ void escape_characters(char *str)
 
         /* Handle escape characters */
         src_pos++;
-        if (*src_pos == '!'
-            || *src_pos == '='
-            || *src_pos == '"'
-            || *src_pos == ','
-            || *src_pos == '('
-            || *src_pos == ')'
-            || *src_pos == '\\') {
-            *dest_pos = *src_pos;
-            dest_pos++;
-            src_pos++;
-            continue;
+        switch (*src_pos)
+        {
+            case '!':
+            case '=':
+            case '"':
+            case ',':
+            case '(':
+            case ')':
+            case '\\':
+                *dest_pos = *src_pos;
+                dest_pos++;
+                src_pos++;
+                continue;
+            case '\n':
+                /* Long lines can be continued with a backslash */
+                src_pos++;
+                continue;
         }
 
         /* Not a escape character */
@@ -184,28 +188,6 @@ void escape_characters(char *str)
     }
 
     *dest_pos = 0;
-}
-
-/*
-    Handle passwd_cmd, append to password regex setting.
-*/
-int handle_passwd_cmd(char *passwd_cmd)
-{
-    if (passwd_cmd == NULL) {
-        return INITIALIZE_SUCCESS;
-    }
-
-    /*
-        Escape after we split passwd_cmds with comma splitter,
-        because '\,' will be convert to ',' by escape_characters.
-    */
-    escape_characters(passwd_cmd);
-    int result = append_password_regex(passwd_cmd);
-    if (result != INITIALIZE_SUCCESS) {
-        trace("Append password regex failed: %s, result: %d\n", passwd_cmd, result);
-    }
-
-    return result;
 }
 
 /*
@@ -225,43 +207,28 @@ int initialize_password_setting(const char *setting_path)
     /* Split PASSWD_CMDS with comma */
     int result = INITIALIZE_SUCCESS;
     int passwd_cmds_length = strlen(passwd_cmds);
-    int backslash_count = 0;
     char* passwd_cmd = passwd_cmds;
     bool start_new_passwd_cmd = true;
     for (int index=0; index < passwd_cmds_length; index++) {
-        if (passwd_cmds[index] == '\\') {
-            backslash_count++;
-            continue;
-        }
-        else if (passwd_cmds[index] != ',') {
-            backslash_count = 0;
-
+        if (start_new_passwd_cmd) {
             /*
                 Set the passwd_cmd point to new command when:
                     1. beginning of passwd_cmds.
                     2. After a comma splitter.
             */
-            if (start_new_passwd_cmd) {
-                passwd_cmd = passwd_cmds + index;
-                start_new_passwd_cmd = false;
-            }
+            passwd_cmd = passwd_cmds + index;
+            start_new_passwd_cmd = false;
+        }
 
+        if (passwd_cmds[index] != PASSWD_CMDS_SPLITTER) {
             continue;
         }
 
-        /*
-            Comma is a splitter when there are even number of backslash before it, for example \\, or \\\\,
-        */
-        bool comma_is_splitter = backslash_count % 2 == 0;
-        backslash_count = 0;
-        if (!comma_is_splitter) {
-            continue;
-        }
-
-        /* Found a comma splitter, handle current passwd_cmd. */
+        /* Found a splitter, handle current passwd_cmd. */
         passwd_cmds[index] = 0;
-        result = handle_passwd_cmd(passwd_cmd);
+        result = append_password_regex(passwd_cmd);
         if (result != INITIALIZE_SUCCESS) {
+            trace("Append password regex failed: %s, result: %d\n", passwd_cmd, result);
             break;
         }
 
@@ -278,7 +245,10 @@ int initialize_password_setting(const char *setting_path)
             1. Comma splitter not exist in PASSWD_CMDS
             2. Last command in PASSWD_CMDS
     */
-    result = handle_passwd_cmd(passwd_cmd);
+    result = append_password_regex(passwd_cmd);
+    if (result != INITIALIZE_SUCCESS) {
+        trace("Append password regex failed: %s, result: %d\n", passwd_cmd, result);
+    }
 
     free(passwd_cmds);
     return result;

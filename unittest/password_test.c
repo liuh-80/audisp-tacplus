@@ -129,11 +129,11 @@ void testcase_release_all_regex() {
 
 /* Test for have_next_line method */
 void testcase_have_next_line() {
-    CU_ASSERT_EQUAL(have_next_line("Have next line \\"), true);
+    CU_ASSERT_EQUAL(have_next_line("Have next line \\\n"), true);
 
-    CU_ASSERT_EQUAL(have_next_line("Not have next line \\\\"), false);
+    CU_ASSERT_EQUAL(have_next_line("Not have next line \\\\\n"), false);
 
-    CU_ASSERT_EQUAL(have_next_line("Have next line \\\\\\"), true);
+    CU_ASSERT_EQUAL(have_next_line("Have next line \\\\\\\n"), true);
 }
 
 /* Test for escape_characters method */
