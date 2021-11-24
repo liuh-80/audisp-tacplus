@@ -65,7 +65,7 @@
 /* Tacacs+ support lib */
 #include <libtac/support.h>
 
-/* Remove password from user command*/
+/* Remove password from user command */
 #include "password.h"
 #include "sudoers_helper.h"
 
