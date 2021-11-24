@@ -127,15 +127,6 @@ void testcase_release_all_regex() {
     CU_ASSERT_EQUAL(get_memory_allocate_count(), 0);
 }
 
-/* Test for have_next_line method */
-void testcase_have_next_line() {
-    CU_ASSERT_EQUAL(have_next_line("Have next line \\\n"), true);
-
-    CU_ASSERT_EQUAL(have_next_line("Not have next line \\\\\n"), false);
-
-    CU_ASSERT_EQUAL(have_next_line("Have next line \\\\\\\n"), true);
-}
-
 /* Test for escape_characters method */
 void testcase_escape_characters() {
     char buffer[MAX_LINE_SIZE];
@@ -185,7 +176,6 @@ int main(void) {
       || !CU_add_test(ste, "Test testcase_fix_password_by_regex()...\n", testcase_fix_password_by_regex)
       || !CU_add_test(ste, "Test testcase_fix_password()...\n", testcase_fix_password)
       || !CU_add_test(ste, "Test testcase_release_all_regex()...\n", testcase_release_all_regex)
-      || !CU_add_test(ste, "Test testcase_have_next_line()...\n", testcase_have_next_line)
       || !CU_add_test(ste, "Test testcase_escape_characters()...\n", testcase_escape_characters)) {
     CU_cleanup_registry();
         return CU_get_error();

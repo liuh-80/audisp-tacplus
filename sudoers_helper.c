@@ -10,12 +10,11 @@
 #include "trace.h"
 
 /* Macros for parse user input */
-#define USER_COMMAND_TOKEN_WHITESPACE              " \t\n\r\f"
-#define USER_COMMAND_TOKEN_SETTING_SPLITTER        " =\t"
-#define USER_COMMAND_TOKEN_EQUAL                   "="
-#define USER_COMMAND_TOKEN_COMMA                   ","
+#define SUDOERS_SETTING_SPLITTER                   " =\t\n"
+#define SUDOERS_EQUAL                              "="
+#define SUDOERS_LF                                 '\n'
 
-#define PASSWD_CMDS_SPLITTER                       '\n'
+#define PASSWD_CMDS_SPLITTER                       '\r'
 
 /* The command alias prefix */
 const char* COMMAND_ALIAS = "Cmnd_Alias";
@@ -23,49 +22,54 @@ const char* COMMAND_ALIAS = "Cmnd_Alias";
 /* The password setting */
 const char* PASSWD_CMDS = "PASSWD_CMDS";
 
-/* Append string to buffer. */
-char* append_string_to_buffer(char* buffer, char* str)
+/*
+    Load file content.
+*/
+char* load_file_content(const char *setting_path)
 {
-    int str_len = strlen(str);
-    int buffer_len = 0;
-    if (buffer != NULL) {
-        buffer_len = strlen(buffer);
-    }
-
-    buffer = realloc(buffer, buffer_len + str_len + 1);
-    if (buffer == NULL) {
-        trace("Reallocate memory for string: %s failed.\n", str);
+    FILE *setting_file = fopen(setting_path, "rt");
+    if(setting_file == NULL) {
+        trace("Can't open setting file: %s\n", setting_path);
         return NULL;
     }
 
-    memcpy(buffer + buffer_len, str, str_len);
-    buffer[buffer_len + str_len] = 0;
+    fseek(setting_file, 0, SEEK_END);
+    size_t setting_file_size = ftell(setting_file);
+    fseek(setting_file, 0, SEEK_SET);
 
-    return buffer;
-}
-
-/*
-    Check if have next line, need handle the escape backslash case, for example:
-        Not have next line:  example line \\\\
-        Have next line:  example line \\\
-    For more information, please check:
-        Long lines can be continued with a backslash (‘\’) as the last character on the line.
-        https://www.sudo.ws/man/1.8.17/sudoers.man.html#Other_special_characters_and_reserved_words
-*/
-bool have_next_line(const char *str)
-{
-    int count = 0;
-    /* Use -2 to ignore check last character, because it will always be \n */
-    int index = strlen(str) - 2;
-    for (;index >= 0; index--) {
-        if (str[index] != '\\') {
-            break;
+    char* file_content = malloc(setting_file_size+1);
+    if (file_content == NULL) {
+        trace("Allocate memory for file: %s failed.\n", setting_path);
+    }
+    else {
+        size_t result = fread(file_content, sizeof(char), setting_file_size, setting_file);
+        if (result == setting_file_size) {
+            file_content[setting_file_size] = 0;
         }
-        
-        count++;
+        else {
+            trace("Read setting file: %s failed.\n", setting_path);
+            free(file_content);
+            file_content = NULL;
+        }
     }
 
-    return count % 2;
+    fclose(setting_file);
+    return file_content;
+}
+
+
+/*
+    Get setting content length
+*/
+size_t setting_content_length(const char *setting)
+{
+    size_t length = 0;
+    while (*setting != 0 && *setting != SUDOERS_LF) {
+        length++;
+        setting++;
+    }
+    
+    return length;
 }
 
 /*
@@ -75,56 +79,47 @@ bool have_next_line(const char *str)
 */
 char* load_passwd_cmds(const char *setting_path)
 {
-    FILE *setting_file= fopen(setting_path, "rt");
-    if(setting_file == NULL) {
-        trace("Can't open setting file: %s\n", setting_path);
+    char* file_content = load_file_content(setting_path);
+    if(file_content == NULL) {
+        trace("Load file: %s failed.\n", setting_path);
         return NULL;
     }
 
-    bool load_next_line = false;
+    escape_characters(file_content);
+    trace("Sudoers content: (%s)\n", file_content);
+
     char *passwd_cmds = NULL;
-    char line_buffer[MAX_LINE_SIZE+1];
-    while (fgets(line_buffer, sizeof(line_buffer), setting_file)) {
-        char* token;
-        if (load_next_line) {
-            token = line_buffer;
-        }
-        else {
-            token = strtok(line_buffer, USER_COMMAND_TOKEN_WHITESPACE);
-            if (!token) {
-                /* Empty line will not get any token */
-                continue;
-            }
-
-            /* Not continue check unfinished multiple line settings */
-            if (strncmp(token, COMMAND_ALIAS, strlen(COMMAND_ALIAS))) {
-                /* Ignore current line when current line is not a command alias */
-                continue;
-            }
-
-            token = strtok(NULL, USER_COMMAND_TOKEN_SETTING_SPLITTER);
-            if (strncmp(token, PASSWD_CMDS, strlen(PASSWD_CMDS))) {
-                /* Ignore current line when current line is not a password setting */
-                continue;
-            }
-
-            /* Get password setting content */
-            token = strtok(NULL, USER_COMMAND_TOKEN_EQUAL);
+    char* token = strtok(file_content, SUDOERS_SETTING_SPLITTER);
+    while (token != NULL) {
+        trace("Token: (%s)\n", token);
+        /* Find Cmnd_Alias */
+        if (strncmp(token, COMMAND_ALIAS, strlen(COMMAND_ALIAS))) {
+            token = strtok(NULL, SUDOERS_SETTING_SPLITTER);
+            continue;
         }
 
-        load_next_line = have_next_line(token);
+        /* Find PASSWD_CMDS setting */
+        token = strtok(NULL, SUDOERS_SETTING_SPLITTER);
+        if (strncmp(token, PASSWD_CMDS, strlen(PASSWD_CMDS))) {
+            token = strtok(NULL, SUDOERS_SETTING_SPLITTER);
+            continue;
+        }
 
-        /* Append PASSWD_CMDS to buffer*/
-        passwd_cmds = append_string_to_buffer(passwd_cmds, token);
+        /* Get PASSWD_CMDS setting content */
+        token = strtok(NULL, SUDOERS_EQUAL);
+        size_t setting_length = setting_content_length(token);
+        passwd_cmds = malloc(setting_length+1);
         if (passwd_cmds == NULL) {
-            trace("Append PASSWD_CMDS to buffer failed.\n");
+            trace("Allocate memory for PASSWD_CMDS buffer failed.\n");
             break;
         }
+        
+        memcpy(passwd_cmds, token, setting_length);
+        passwd_cmds[setting_length] = 0;
+        break;
     }
 
-    fclose(setting_file);
-
-    escape_characters(passwd_cmds);
+    free(file_content);
     return passwd_cmds;
 }
 

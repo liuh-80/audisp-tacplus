@@ -2,4 +2,4 @@
 
 Cmnd_Alias      PASSWD_CMDS = /usr/local/bin/config tacacs passkey *, \
                               /usr/sbin/unfinished\
-command * \, ,/usr/sbin/chpasswd *   , /usr/sbin/setpasswd *
+command * \, ,/usr/sbin/chpasswd *   , /usr/sbin/setpasswd *
